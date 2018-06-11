@@ -4,32 +4,31 @@ from collections import Iterable
 from typing import Sequence
 from uuid import uuid4
 
-from django.core import serializers
+from django.core.serializers.python import Serializer, Deserializer
 from django.core.exceptions import ObjectDoesNotExist
 from django.http import Http404
 from django.db.models import Model
 
 
 class ModelSerializeMixin(object):
-
     model = None   # type: Model
     fields = None  # type: Sequence[str]
 
     def get_fields(self):
-        pass
+        return [field.name for field in self.model._meta.fields]
 
     def get_queryset(self):
         return self.model.objects.all()
 
     @staticmethod
-    def serialize(qs, fields=None):
-        if not isinstance(qs, Iterable):
-            qs = [qs]
-        return serializers.serialize('json', qs, fields=fields)
+    def serialize(obj, fields=None):
+        serializer = Serializer()
+        if not isinstance(obj, Iterable):
+            obj = [obj]
+        return serializer.serialize(obj, fields=fields)
 
     def list_records(self, fields=None):
-        return [json.loads(self.serialize(obj))[0] for obj in self.get_queryset()]
-        # return json.loads(self.serialize(self.get_queryset(), fields=fields))
+        return [self.serialize(obj, fields=fields) for obj in self.get_queryset()]
 
     def get_record(self, uuid, fields=None):
         try:
@@ -54,7 +53,7 @@ class ModelSerializeMixin(object):
                     'fields': data,
                     'model': '{}.{}'.format(self.model._meta.app_label, self.model._meta.model_name),
             }]
-        for obj in serializers.deserialize('json', json.dumps(save_data)):
+        for obj in Deserializer(save_data):
             obj.save()
 
     def delete_record(self, pk):
