@@ -8,6 +8,7 @@ from django.core.serializers.python import Serializer, Deserializer
 from django.core.exceptions import ObjectDoesNotExist
 from django.http import Http404
 from django.db.models import Model
+from django.shortcuts import get_object_or_404
 
 
 class ModelSerializeMixin(object):
@@ -28,16 +29,10 @@ class ModelSerializeMixin(object):
         return serializer.serialize(obj, fields=fields)
 
     def list_records(self, fields=None):
-        return [self.serialize(obj, fields=fields) for obj in self.get_queryset()]
+        return [self.serialize(obj, fields=fields)[0] for obj in self.get_queryset()]
 
-    def get_record(self, uuid, fields=None):
-        try:
-            record = self.get_queryset().get(uuid=uuid)
-            serialized_record = self.serialize(record, fields=fields)
-            serialized_record_json = json.loads(serialized_record)
-            return serialized_record_json[0]
-        except ObjectDoesNotExist:
-            return Http404
+    def get_record(self, pk, fields=None):
+        return self.serialize(get_object_or_404(self.model, pk=pk))
 
     def save_record(self, data, pk=None):
         if type(data) == str:
