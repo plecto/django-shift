@@ -5,8 +5,8 @@ from django.views.decorators.csrf import csrf_exempt
 from typing import Type, Sequence
 
 from django_shift.docs.views import DocumentationRoot
-from django_shift.views import APIRoot, APIChangeLogView, APIObjectCreate, APIObjectDescribe, APIObjectGetRecord
-from django_shift.resources import APIObject
+from django_shift.views import APIRoot, APIChangeLogView, APICollectionView, APIObjectDescribe, APIResourceView
+from django_shift.resources import APIResource
 
 
 class APIRouter(object):
@@ -17,7 +17,7 @@ class APIRouter(object):
         )
 
     def get_newest_version(self):
-        return list(self.versions.keys())[0]
+        return list([version for version in self.versions.keys() if version != 'DEV'])[0]
 
     def add_object(self, obj):
         if not obj.name:
@@ -25,20 +25,21 @@ class APIRouter(object):
         self.objects[obj.name] = obj
 
     def get_objects(self):
-        # type: () -> Sequence[Type[APIObject]]
+        # type: () -> Sequence[Type[APIResource]]
         return self.objects.values()
 
     def get_object(self, name):
-        # type: (str) -> Type[APIObject]
+        # type: (str) -> Type[APIResource]
         return self.objects[name]
 
     def urls(self):
         return ([
             url('^$', APIRoot.as_view(router=self), name="api_root"),
             url('^changelog/$', APIChangeLogView.as_view(router=self), name="api_changelog"),
-            url('^(?P<object_name>([\w\- ]+))/$', csrf_exempt(APIObjectCreate.as_view(router=self)), name="api_object_create"),
+            url('^(?P<object_name>([\w\- ]+))/$', csrf_exempt(APICollectionView.as_view(router=self)), name="api_object_create"),
             url('^(?P<object_name>([\w\- ]+))/describe/$', APIObjectDescribe.as_view(router=self), name="api_object_describe"),
-            url('^(?P<object_name>([\w\- ]+))/(?P<record_id>([\w\- ]+))/$', csrf_exempt(APIObjectGetRecord.as_view(router=self)), name="api_object_get_record"),
+            url('^(?P<object_name>([\w\- ]+))/(?P<record_id>([\w\- ]+))/$', csrf_exempt(APIResourceView.as_view(router=self)), name="api_object_get_record"),
+            url('^(?P<object_name>([\w\- ]+))/(?P<record_id>([\w\- ]+))/(?P<action>([\w\- ]+))/$', csrf_exempt(APIResourceView.as_view(router=self)), name="api_object_action"),
         ], 'shift', 'shift')
 
     def documentation_urls(self):

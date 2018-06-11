@@ -1,5 +1,5 @@
 import json
-from django.core.exceptions import PermissionDenied
+from django.core.exceptions import PermissionDenied, ValidationError
 from django.http import JsonResponse
 from django.views.generic import View
 from typing import List
@@ -35,6 +35,14 @@ class APIView(View):
         })
 
 
+    def error_reponse(self, error_type, message):
+        assert error_type in ['validation_error']
+        return JsonResponse({
+            'type': error_type,
+            'message': message
+        })
+
+
 class APIRoot(APIView):  # List of API Collections
     def get(self, request):
 
@@ -42,8 +50,6 @@ class APIRoot(APIView):  # List of API Collections
             obj.get_name(): {
                 'label': obj.get_label(),
                 'name': obj.get_name(),
-                'deletable': obj.supports_delete(),
-                'updatable': obj.supports_update(),
                 'urls': {
                     'create': reverse("shift:api_object_create", args=[obj.get_name()]),
                     'describe': reverse("shift:api_object_describe", args=[obj.get_name()]),
@@ -89,15 +95,27 @@ class MigrationMixin:
                             change.migrate_request(data)
 
 
-class APIObjectGetRecord(MigrationMixin, APIView):
+class APIResourceView(MigrationMixin, APIView):
     def get(self, request, **kwargs):
         obj = self.router.get_object(kwargs['object_name'])(request)
+
+        # Permissions
+
         if not obj.can_view():
             raise PermissionDenied()
 
+        # Fetch data
+
         data = obj.get_record(kwargs['record_id'])
 
+        # Migrate newest API version to actual version
+
         self.migrate_data(obj, [data], response=True)
+
+        # Validate
+
+        # if not obj.validator.validate(data):
+        #     return self.error_reponse("validation_error", message=obj.validator.errors)  # TODO: Log silently and return incorrect response
 
         # return
         return JsonResponse({
@@ -113,11 +131,25 @@ class APIObjectGetRecord(MigrationMixin, APIView):
         if not obj.can_update():
             raise PermissionDenied()
 
+        # Get the posted data
+
         data = json.loads(request.body)
+
+        # Migrate old request to newest
 
         self.migrate_data(obj, [data], request=True)
 
+        if not obj.validator.validate(data):
+            return self.error_reponse("validation_error", message=obj.validator.errors)
+
+        # Save record
+
         data = obj.save_record(data, kwargs['record_id'])
+
+        if not obj.validator.validate(data):
+            return self.error_reponse("validation_error", message=obj.validator.errors)  # TODO: Log silently and return incorrect response
+
+        # Migrate back to old format
 
         self.migrate_data(obj, [data], response=True)
 
@@ -148,14 +180,20 @@ class APIObjectGetRecord(MigrationMixin, APIView):
         })
 
 
-class APIObjectCreate(MigrationMixin, APIView):
+class APICollectionView(MigrationMixin, APIView):
 
     def get(self, request, **kwargs):
         obj = self.router.get_object(kwargs['object_name'])(request)
         if not obj.can_view():
             raise PermissionDenied()
 
-        record_list = obj.list_records()
+        try:
+            record_list = obj.list_records()
+        except ValidationError as e:
+            return self.error_reponse(
+                'validation_error',
+                message=e.message
+            )
 
         self.migrate_data(obj, record_list, response=True)
 
@@ -163,7 +201,8 @@ class APIObjectCreate(MigrationMixin, APIView):
 
         def enrich_list_item(itm):
             itm.update({
-                "object": obj.name
+                "object": obj.name,
+                "url": reverse('shift:api_object_get_record', args=[obj.name, itm.get(obj.pk_field)]),
             })
             return itm
 
@@ -179,13 +218,28 @@ class APIObjectCreate(MigrationMixin, APIView):
         if not obj.can_create():
             raise PermissionDenied()
 
+        # Get posted data
         data = json.loads(request.body)
+
+        # Migrate old request to newest
 
         self.migrate_data(obj, [data], request=True)
 
-        data = obj.save_record(request, data)
+        print(obj.get_schema())
+
+        # Validate request
+        if not obj.validator.validate(data):
+            return self.error_reponse("validation_error", message=obj.validator.errors)
+
+        data = obj.save_record(data)
+
+        # Migrate back to old format
 
         self.migrate_data(obj, [data], response=True)
+
+        # Validate response
+        if not obj.validator.validate(data):
+            return self.error_reponse("validation_error", message=obj.validator.errors)  # TODO: Log silently and return incorrect response
 
         # return
         return JsonResponse({

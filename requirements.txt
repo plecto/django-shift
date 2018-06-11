@@ -1,5 +1,4 @@
 six
-pygments
 Django
 typing
 cerberus

@@ -3,10 +3,12 @@ from django.contrib import admin
 
 from django_shift.router import APIRouter
 from example_project.resources import UserObject, UserResource
-from example_project.shifts import AddUsernameShift
+from example_project.shifts import AddUsernameShift, AddIdShift
 
 api_router = APIRouter(versions={
-    'DEV': [],
+    'DEV': [
+        AddIdShift
+    ],
     '2018-06-10': [
         AddUsernameShift
     ],

@@ -10,34 +10,56 @@ from django.http import Http404
 from django.db.models import Model
 from django.shortcuts import get_object_or_404
 
+from django_shift.resources import APIResource
 
-class ModelSerializeMixin(object):
+from django.db import models
+
+serializer = Serializer()
+
+DJANGO_FIELD_TO_CERBERUS = {
+    'default': 'string',
+    models.BooleanField: 'boolean'
+
+}
+
+
+class APIModelResource(APIResource):
     model = None   # type: Model
     fields = None  # type: Sequence[str]
 
-    def get_fields(self):
-        return [field.name for field in self.model._meta.fields]
+    def __init__(self, *args, **kwargs):
+        super(APIModelResource, self).__init__(*args, **kwargs)
+        self.pk_field = self.model._meta.pk.name
+
+    def get_schema(cls):
+        return {
+            field.name: {
+                'type': DJANGO_FIELD_TO_CERBERUS.get(type(field), DJANGO_FIELD_TO_CERBERUS['default'])
+            } for field in cls.model._meta.fields if field.name in cls.fields
+        }
 
     def get_queryset(self):
         return self.model.objects.all()
 
-    @staticmethod
-    def serialize(obj, fields=None):
-        serializer = Serializer()
-        if not isinstance(obj, Iterable):
-            obj = [obj]
-        return serializer.serialize(obj, fields=fields)
+    def serialize(self, obj):
+        response = serializer.serialize([obj], fields=self.fields)[0]
+        data = response['fields']
 
-    def list_records(self, fields=None):
-        return [self.serialize(obj, fields=fields)[0] for obj in self.get_queryset()]
+        # add pk's to the 'fields' as django always take them out of it
+        if 'pk' in self.fields:
+            data['pk'] = response['pk']
+        if self.model._meta.pk.name in self.fields:
+            data[self.model._meta.pk.name] = response['pk']
 
-    def get_record(self, pk, fields=None):
+        return data
+
+    def list_records(self):
+        return [self.serialize(obj) for obj in self.get_queryset()]
+
+    def get_record(self, pk):
         return self.serialize(get_object_or_404(self.model, pk=pk))
 
     def save_record(self, data, pk=None):
-        if type(data) == str:
-            data = json.loads(data)
-
         if pk:  # If we are updating an existing record
             existing_record = self.get_record(pk)
             existing_record['fields'].update(data)

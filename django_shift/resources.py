@@ -1,21 +1,33 @@
+from cerberus import Validator
 from django.core.handlers.wsgi import WSGIRequest
 from six import with_metaclass
 from typing import Optional, List, Dict
 
 
-class APIObject(object):
+class APIResource(object):
     name = None  # type: Optional[str]
     label = None  # type: Optional[str]
+    schema = None  # type: dict
+    pk_field = None  # type: str
 
     def __init__(self, request, *args, **kwargs):
         # type: (WSGIRequest, list, dict) -> None
         self.request = request
+        self.validator = Validator(self.schema)
+
+
+    @classmethod
+    def get_schema(cls):
+        if cls.schema:
+            return cls.schema
+        raise NotImplementedError()
 
     @classmethod
     def get_label(cls):
         # type: () -> str
         if cls.label:
             return cls.label
+        raise NotImplementedError()
 
     @classmethod
     def get_name(cls):
@@ -52,14 +64,7 @@ class APIObject(object):
 
     def get_fields(self):
         # type: () -> List[Dict[str, dict]]
-        return [
-            # {
-            #     field.name: {
-            #         'label': field.name,
-            #     }
-            # } for field in obj.datasourceextrafield_set.all()
-
-        ]
+        return self.get_schema()
 
     def get_record(self, _id):
         # type: (str) -> dict
@@ -76,6 +81,10 @@ class APIObject(object):
     def delete_record(self, _id):
         # TODO: What should delete return?
         raise NotImplementedError()
+
+
+class APIResourceAction(object):
+    pass
 
 
 class ShiftMeta(type):
