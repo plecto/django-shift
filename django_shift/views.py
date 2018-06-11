@@ -2,6 +2,7 @@ import json
 from django.core.exceptions import PermissionDenied
 from django.http import JsonResponse
 from django.views.generic import View
+from typing import List
 try:
     from django.urls import reverse
 except ImportError:
@@ -12,9 +13,12 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from django_shift.router import APIRouter
 
+from django_shift.resources import APIShift
+
 
 class APIView(View):
     router = None  # type: APIRouter
+    api_version = None  # type: str
 
     def dispatch(self, request, *args, **kwargs):
         self.api_version = request.GET.get('Api-Version', request.META.get("HTTP_API_VERSION", self.router.get_newest_version()))
@@ -25,19 +29,6 @@ class APIView(View):
         response = super(APIView, self).dispatch(request, *args, **kwargs)
         response['Api-Version'] = self.api_version
         if isinstance(response, JsonResponse):
-            # if request.META['CONTENT_TYPE'] == 'text/plain':
-            #
-            #     # We can't pass args to the json encoder because it's already encoded so we will (for now) decode it
-            #     # and re-encode it with indent. Also - let's order it so it's nicer to read when we are at it
-            #
-            #     decoded = json.loads(response.content)
-            #     indented = json.dumps(decoded, indent=4)
-            #
-            #     return render_to_response("django_shift/api_view.html", context={
-            #         'request': request,
-            #         'response': response,
-            #         'json': highlight(indented, JSONLexer(), URLHtmlFormatter())
-            #     })
             return response
         return JsonResponse({
             'error': 'unexpected return type'
@@ -47,21 +38,26 @@ class APIView(View):
 class APIRoot(APIView):  # List of API Collections
     def get(self, request):
 
+        objects = {
+            obj.get_name(): {
+                'label': obj.get_label(),
+                'name': obj.get_name(),
+                'deletable': obj.supports_delete(),
+                'updatable': obj.supports_update(),
+                'urls': {
+                    'create': reverse("shift:api_object_create", args=[obj.get_name()]),
+                    'describe': reverse("shift:api_object_describe", args=[obj.get_name()]),
+                    'list': reverse("shift:api_object_create", args=[obj.get_name()]),
+                    'record_detail': reverse("shift:api_object_get_record", args=[obj.get_name(), '-id-']).replace("-id-", "{id}"),
+                }
+            } for obj in self.router.get_objects()
+        }
+
         return JsonResponse({
-                obj.get_name(): {
-                    'deletable': obj.supports_delete(),
-                    'label': obj.get_label(),
-                    'name': obj.get_name(),
-                    'updateable': obj.supports_update(),  # TODO: How to spell this
-                    'urls': {
-                        'create': reverse("api_object_create", args=[obj.get_name()]),
-                        'describe': reverse("api_object_describe", args=[obj.get_name()]),
-                        'list': reverse("api_object_create", args=[obj.get_name()]),
-                        'record_detail': reverse("api_object_get_record", args=[obj.get_name(), '-id-']).replace("-id-", "{id}"),
-                    }
-                } for obj in self.router.get_objects()
-            }
-         )
+            "objects": objects,
+            "api_version": self.api_version
+
+        })
 
 
 class APIObjectDescribe(APIView):
@@ -83,9 +79,9 @@ class MigrationMixin:
         versions = list(self.router.versions.keys())
         versions_behind = versions.index(self.api_version)
         for version in versions[0:versions_behind]:
-            changes = self.router.versions[version]
+            changes = self.router.versions[version]  # type: List[APIShift]
             for change in changes:
-                if isinstance(obj, change.object):
+                if isinstance(obj, change.resource):
                     for data in data_list:
                         if response:
                             change.migrate_response(data)
@@ -163,10 +159,19 @@ class APIObjectCreate(MigrationMixin, APIView):
 
         self.migrate_data(obj, record_list, response=True)
 
+        # TODO: Pagination. Should it be required?
+
+        def enrich_list_item(itm):
+            itm.update({
+                "object": obj.name
+            })
+            return itm
+
         # return
         return JsonResponse({
             'object': 'list',
-            'data': record_list
+            # 'has_more': True
+            'data': [enrich_list_item(itm) for itm in record_list]
         })
 
     def post(self, request, **kwargs):
@@ -193,23 +198,9 @@ class APIChangeLogView(APIView):
     def get(self, request, **kwargs):
         return JsonResponse({
             version: [
-                changelog.description for changelog in changelogs
+                {
+                    "resource": changelog.resource.name,
+                    "description": changelog.get_description()
+                } for changelog in changelogs
             ] for version, changelogs in self.router.versions.items()
         })
-#
-#
-#
-# class APICollection(object):
-#     name = None
-#
-#     def __init__(self, request):
-#         self.request = request
-#         self.objects = {}
-#
-#     def add_object(self, obj):
-#         self.objects[obj.get_name()] = obj
-#
-#     def get_objects(self):
-#         return self.objects.values()
-#
-#

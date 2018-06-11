@@ -1,0 +1,35 @@
+<html>
+<head>
+    <title>Docs</title>
+</head>
+<body>
+    <h1>Resources</h1>
+    <ul>
+    {% for resource in resources %}
+        <li>
+            <strong>{{ resource.label }}</strong>
+            <ul>
+                <li>Fields: {{ resource.get_fields }}</li>
+                <li>Can view: {{ resource.can_view }}</li>
+                <li>Can create: {{ resource.can_create }}</li>
+                <li>Can update: {{ resource.can_update }}</li>
+                <li>Can delete: {{ resource.can_delete }}</li>
+            </ul>
+        </li>
+    {% endfor %}
+    </ul>
+    <h1>Changelog</h1>
+    <ul>
+    {% for version, shifts in changelog %}
+        <li>
+            {{ version }}
+            <ul>
+                {% for shift in shifts %}
+                    <li>{{ shift.get_description }}</li>
+                {% endfor %}
+            </ul>
+        </li>
+    {% endfor %}
+    </ul>
+</body>
+</html>
