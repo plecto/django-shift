@@ -33,11 +33,18 @@ class APIModelResource(APIResource):
             self.pk_field = self.model._meta.pk.name
 
     def get_schema(cls):
-        return {
+        schema = {
             field.name: {
                 'type': DJANGO_FIELD_TO_CERBERUS.get(type(field), DJANGO_FIELD_TO_CERBERUS['default'])
             } for field in cls.model._meta.fields if field.name in cls.fields
         }
+        if cls.schema:
+            for field, opts in cls.schema.items():
+                schema[field].update(opts)
+        for field in cls.fields:
+            if field not in schema:
+                raise Exception("Field %s does not exist in %s" % (field, cls.model))
+        return schema
 
     def get_queryset(self):
         return self.model.objects.all()

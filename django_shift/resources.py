@@ -82,6 +82,14 @@ class APIResource(object):
         # TODO: What should delete return?
         raise NotImplementedError()
 
+    def serialize(self, obj):
+        # type: (object) -> dict
+        raise NotImplementedError()
+
+    def deserialize(self, data):
+        # type: (dict) -> object
+        raise NotImplementedError()
+
 
 class APIResourceAction(object):
     pass
