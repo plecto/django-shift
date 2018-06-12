@@ -33,13 +33,22 @@ class APIModelResource(APIResource):
             self.pk_field = self.model._meta.pk.name
 
     def get_schema(cls):
+        # Regular fields
         schema = {
             field.name: {
                 'type': DJANGO_FIELD_TO_CERBERUS.get(type(field), DJANGO_FIELD_TO_CERBERUS['default'])
             } for field in cls.model._meta.fields + cls.model._meta.many_to_many if field.name in cls.fields
         }
+        # M2M fields
+        schema.update({
+            field.name: {
+                'type': 'list'
+            } for field in cls.model._meta.many_to_many if field.name in cls.fields
+        })
         if cls.schema:
             for field, opts in cls.schema.items():
+                if field not in schema:
+                    schema[field] = {}
                 schema[field].update(opts)
         for field in cls.fields:
             if field not in schema:
