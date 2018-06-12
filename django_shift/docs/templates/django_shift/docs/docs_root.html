@@ -9,7 +9,21 @@
         <li>
             <strong>{{ resource.label }}</strong>
             <ul>
-                <li>Fields: {{ resource.get_fields }}</li>
+                <li>
+                    Fields:
+                    <ul>
+                        {% for field_name, field_opts in resource.get_fields.items %}
+                        <li>
+                            <strong>{{ field_name }}</strong>
+                            <ul>
+                                {% for key, value in field_opts.items %}
+                                    <li>{{ key }}: {{ value }}</li>
+                                {% endfor %}
+                            </ul>
+                        </li>
+                        {% endfor %}
+                    </ul>
+                </li>
                 <li>Can view: {{ resource.can_view }}</li>
                 <li>Can create: {{ resource.can_create }}</li>
                 <li>Can update: {{ resource.can_update }}</li>
