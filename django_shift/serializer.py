@@ -29,7 +29,8 @@ class APIModelResource(APIResource):
 
     def __init__(self, *args, **kwargs):
         super(APIModelResource, self).__init__(*args, **kwargs)
-        self.pk_field = self.model._meta.pk.name
+        if not self.pk_field:
+            self.pk_field = self.model._meta.pk.name
 
     def get_schema(cls):
         return {
@@ -40,6 +41,11 @@ class APIModelResource(APIResource):
 
     def get_queryset(self):
         return self.model.objects.all()
+
+    def get_object(self, pk):
+        return get_object_or_404(self.get_queryset(), **{
+            self.pk_field: pk
+        })
 
     def serialize(self, obj):
         response = serializer.serialize([obj], fields=self.fields)[0]
@@ -57,7 +63,7 @@ class APIModelResource(APIResource):
         return [self.serialize(obj) for obj in self.get_queryset()]
 
     def get_record(self, pk):
-        return self.serialize(get_object_or_404(self.model, pk=pk))
+        return self.serialize(self.get_object(pk))
 
     def save_record(self, data, pk=None):
         if pk:  # If we are updating an existing record
@@ -75,7 +81,6 @@ class APIModelResource(APIResource):
 
     def delete_record(self, pk):
         try:
-            obj = self.get_queryset().get(pk=pk)
-            obj.delete()
+            self.get_object(pk).delete()
         except ObjectDoesNotExist:
             return Http404
