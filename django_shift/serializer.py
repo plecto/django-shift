@@ -36,7 +36,7 @@ class APIModelResource(APIResource):
         schema = {
             field.name: {
                 'type': DJANGO_FIELD_TO_CERBERUS.get(type(field), DJANGO_FIELD_TO_CERBERUS['default'])
-            } for field in cls.model._meta.fields if field.name in cls.fields
+            } for field in cls.model._meta.fields + cls.model._meta.many_to_many if field.name in cls.fields
         }
         if cls.schema:
             for field, opts in cls.schema.items():
