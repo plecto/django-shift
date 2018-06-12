@@ -200,6 +200,7 @@ class APICollectionView(MigrationMixin, APIView):
         # TODO: Pagination. Should it be required?
 
         def enrich_list_item(itm):
+            itm = obj.validator.normalized(itm)
             itm.update({
                 "object": obj.name,
                 "url": reverse('shift:api_object_get_record', args=[obj.name, itm.get(obj.pk_field)]),
@@ -224,8 +225,6 @@ class APICollectionView(MigrationMixin, APIView):
         # Migrate old request to newest
 
         self.migrate_data(obj, [data], request=True)
-
-        print(obj.get_schema())
 
         # Validate request
         if not obj.validator.validate(data):
